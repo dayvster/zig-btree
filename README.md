@@ -15,6 +15,11 @@ A robust, generic B-Tree implementation for Zig.
 - MIT Licensed
 
 ## Usage
+### With `zig fetch`
+
+```bash
+zig fetch --save git+https://github.com/dayvster/zig-btree
+```
 
 Add this repo as a dependency in your `build.zig.zon`:
 

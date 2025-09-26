@@ -1,0 +1,24 @@
+# Zig build and cache
+zig-cache/
+zig-out/
+
+# VSCode
+.vscode/
+.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor swap/backup
+*~
+*.swp
+*.swo
+
+# Test output
+*.log
+
+# Ignore binaries
+*.exe
+*.out
+*.bin

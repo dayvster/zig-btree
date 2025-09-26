@@ -1,17 +1,24 @@
 const std = @import("std");
-
-const btree = @import("btree.zig");
+const btree = @import("btree");
 
 pub fn main() !void {
     // Example usage of BTree
     var gpa = std.heap.page_allocator;
-    const tree = btree.BTree.init(&gpa, 2);
+    var tree = btree.BTree(i32, intCompare).init(&gpa, 2);
+    defer tree.deinit();
     std.debug.print("BTree created with min degree {d}\n", .{tree.t});
+}
+
+fn intCompare(a: i32, b: i32) std.math.Order {
+    if (a < b) return std.math.Order.lt;
+    if (a > b) return std.math.Order.gt;
+    return std.math.Order.eq;
 }
 
 test "simple test" {
     const gpa = std.testing.allocator;
-    var tree = btree.BTree.init(&gpa, 2);
+    var tree = btree.BTree(i32, intCompare).init(&gpa, 2);
+    defer tree.deinit();
     try tree.insert(10);
     try tree.insert(20);
     try tree.insert(5);
@@ -19,9 +26,6 @@ test "simple test" {
     try std.testing.expect(found != null);
     const not_found = tree.search(99);
     try std.testing.expect(not_found == null);
-    if (tree.root) |r| {
-        gpa.destroy(r);
-    }
 }
 
 test "fuzz example" {

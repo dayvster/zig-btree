@@ -134,6 +134,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("tests/tests.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{.{ .name = "btree", .module = mod }},
         }),
     });
     const run_tests = b.addRunArtifact(tests);

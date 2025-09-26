@@ -146,16 +146,16 @@ pub fn BTree(comptime T: type, comptime compare: fn (T, T) std.math.Order) type 
         pub fn delete(self: *Self, k: T) !void {
             if (self.root == null) return;
             try self.deleteNode(self.root.?, k);
-            // If the root node has 0 keys and is not a leaf, make its first child the new root
-            if (self.root.?.n == 0 and !self.root.?.leaf) {
-                const old_root = self.root.?;
-                self.root = old_root.children[0];
-                self.allocator.destroy(old_root);
-            }
-            // If the root is empty and a leaf, tree is now empty
-            if (self.root.?.n == 0 and self.root.?.leaf) {
-                self.allocator.destroy(self.root.?);
-                self.root = null;
+            // If the root node has 0 keys, handle root replacement or tree emptying
+            if (self.root != null and self.root.?.n == 0) {
+                if (self.root.?.leaf) {
+                    self.allocator.destroy(self.root.?);
+                    self.root = null;
+                } else {
+                    const old_root = self.root.?;
+                    self.root = old_root.children[0];
+                    self.allocator.destroy(old_root);
+                }
             }
         }
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const btree_mod = @import("src/btree.zig");
+const btree_mod = @import("btree");
 
 fn intCompare(a: i32, b: i32) std.math.Order {
     if (a < b) return std.math.Order.lt;

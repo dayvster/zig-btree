@@ -1,22 +1,23 @@
 const std = @import("std");
 
-pub fn BTree(comptime T: type) type {
+pub fn BTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
-        pub const CompareFn = fn (T, T) std.math.Order;
+        pub const CompareFn = fn (K, K) std.math.Order;
         pub const Node = struct {
-            keys: []T,
+            pairs: []Pair,
             children: []?*Node,
             n: usize,
             leaf: bool,
         };
+        const Pair = struct { key: K, value: V };
 
         pub const Iterator = struct {
             stack: []?*Node,
             stack_indices: []usize,
             depth: usize,
             allocator: *const std.mem.Allocator,
-            current: ?*T,
+            current: ?*Pair,
 
             pub fn init(tree: *Self) !Iterator {
                 const max_depth = 32 * tree.t;
@@ -58,12 +59,12 @@ pub fn BTree(comptime T: type) type {
                 }
             }
 
-            pub fn next(self: *Iterator) ?*T {
+            pub fn next(self: *Iterator) ?*Pair {
                 while (self.depth > 0) {
                     const node = self.stack[self.depth - 1].?;
                     const idx = self.stack_indices[self.depth - 1];
                     if (idx < node.n) {
-                        self.current = &node.keys[idx];
+                        self.current = &node.pairs[idx];
                         self.stack_indices[self.depth - 1] += 1;
                         if (!node.leaf and node.children[idx + 1] != null) {
                             self.push(node.children[idx + 1].?, 0);
@@ -86,7 +87,7 @@ pub fn BTree(comptime T: type) type {
         root: ?*Node,
         t: usize,
         allocator: *const std.mem.Allocator,
-        compare: *const fn (T, T) std.math.Order,
+        compare: *const fn (K, K) std.math.Order,
         /// Initialize a new BTree with the given allocator and minimum degree `t`.
         pub fn init(allocator: *const std.mem.Allocator, t: usize, compare: CompareFn) @This() {
             return @This(){
@@ -109,7 +110,7 @@ pub fn BTree(comptime T: type) type {
                     if (maybe_child) |child| self.freeNode(child);
                 }
             }
-            self.allocator.free(node.keys);
+            self.allocator.free(node.pairs);
             self.allocator.free(node.children);
             self.allocator.destroy(node);
         }
@@ -117,7 +118,7 @@ pub fn BTree(comptime T: type) type {
         fn createNode(self: *@This(), leaf: bool) !*Node {
             const node = try self.allocator.create(Node);
             node.* = Node{
-                .keys = try self.allocator.alloc(T, 2 * self.t - 1),
+                .pairs = try self.allocator.alloc(Pair, 2 * self.t - 1),
                 .children = try self.allocator.alloc(?*Node, 2 * self.t),
                 .n = 0,
                 .leaf = leaf,
@@ -125,14 +126,14 @@ pub fn BTree(comptime T: type) type {
             return node;
         }
 
-        pub fn search(self: *@This(), k: T) ?*T {
+        pub fn search(self: *@This(), k: K) ?*Pair {
             return if (self.root) |r| self.searchNode(r, k) else null;
         }
 
-        fn searchNode(self: *@This(), node: *Node, k: T) ?*T {
+        fn searchNode(self: *@This(), node: *Node, k: K) ?*Pair {
             var i: usize = 0;
-            while (i < node.n and self.compare(k, node.keys[i]) == .gt) : (i += 1) {}
-            if (i < node.n and self.compare(k, node.keys[i]) == .eq) return &node.keys[i];
+            while (i < node.n and self.compare(k, node.pairs[i].key) == .gt) : (i += 1) {}
+            if (i < node.n and self.compare(k, node.pairs[i].key) == .eq) return &node.pairs[i];
             if (node.leaf) return null;
             if (node.children[i]) |child| {
                 return self.searchNode(child, k);
@@ -141,10 +142,10 @@ pub fn BTree(comptime T: type) type {
             }
         }
 
-        pub fn insert(self: *@This(), k: T) !void {
+        pub fn insert(self: *@This(), k: K, v: V) !void {
             if (self.root == null) {
                 self.root = try self.createNode(true);
-                self.root.?.keys[0] = k;
+                self.root.?.pairs[0] = Pair{ .key = k, .value = v };
                 self.root.?.n = 1;
                 return;
             }
@@ -153,28 +154,28 @@ pub fn BTree(comptime T: type) type {
                 s.children[0] = self.root;
                 try self.splitChild(s, 0, self.root.?);
                 self.root = s;
-                try self.insertNonFull(s, k);
+                try self.insertNonFull(s, k, v);
             } else {
-                try self.insertNonFull(self.root.?, k);
+                try self.insertNonFull(self.root.?, k, v);
             }
         }
 
-        fn insertNonFull(self: *@This(), node: *Node, k: T) !void {
+        fn insertNonFull(self: *@This(), node: *Node, k: K, v: V) !void {
             var i = node.n;
             if (node.leaf) {
-                while (i > 0 and self.compare(k, node.keys[i - 1]) == .lt) : (i -= 1) {
-                    node.keys[i] = node.keys[i - 1];
+                while (i > 0 and self.compare(k, node.pairs[i - 1].key) == .lt) : (i -= 1) {
+                    node.pairs[i] = node.pairs[i - 1];
                 }
-                node.keys[i] = k;
+                node.pairs[i] = Pair{ .key = k, .value = v };
                 node.n += 1;
             } else {
-                while (i > 0 and self.compare(k, node.keys[i - 1]) == .lt) : (i -= 1) {}
+                while (i > 0 and self.compare(k, node.pairs[i - 1].key) == .lt) : (i -= 1) {}
                 if (node.children[i]) |child| {
                     if (child.n == 2 * self.t - 1) {
                         try self.splitChild(node, i, child);
-                        if (self.compare(k, node.keys[i]) == .gt) i += 1;
+                        if (self.compare(k, node.pairs[i].key) == .gt) i += 1;
                     }
-                    try self.insertNonFull(node.children[i].?, k);
+                    try self.insertNonFull(node.children[i].?, k, v);
                 } else {
                     @panic("insertNonFull: missing child");
                 }
@@ -186,7 +187,7 @@ pub fn BTree(comptime T: type) type {
             var z = try self.createNode(y.leaf);
             z.n = t - 1;
             for (0..t - 1) |j| {
-                z.keys[j] = y.keys[j + t];
+                z.pairs[j] = y.pairs[j + t];
             }
             if (!y.leaf) {
                 for (0..t) |j| {
@@ -201,13 +202,13 @@ pub fn BTree(comptime T: type) type {
             parent.children[i + 1] = z;
             j = parent.n;
             while (j > i) : (j -= 1) {
-                parent.keys[j] = parent.keys[j - 1];
+                parent.pairs[j] = parent.pairs[j - 1];
             }
-            parent.keys[i] = y.keys[t - 1];
+            parent.pairs[i] = y.pairs[t - 1];
             parent.n += 1;
         }
 
-        pub fn delete(self: *@This(), k: T) !void {
+        pub fn delete(self: *@This(), k: K) !void {
             if (self.root == null) return;
             try self.deleteNode(self.root.?, k);
             // If the root node has 0 keys, handle root replacement or tree emptying
@@ -223,13 +224,13 @@ pub fn BTree(comptime T: type) type {
             }
         }
 
-        fn deleteNode(self: *@This(), node: *Node, k: T) !void {
+        fn deleteNode(self: *@This(), node: *Node, k: K) !void {
             var idx: usize = 0;
-            while (idx < node.n and self.compare(k, node.keys[idx]) == .gt) : (idx += 1) {}
-            if (idx < node.n and self.compare(k, node.keys[idx]) == .eq) {
+            while (idx < node.n and self.compare(k, node.pairs[idx].key) == .gt) : (idx += 1) {}
+            if (idx < node.n and self.compare(k, node.pairs[idx].key) == .eq) {
                 if (node.leaf) {
                     // Case 1: key in leaf node
-                    for (idx..node.n - 1) |i| node.keys[i] = node.keys[i + 1];
+                    for (idx..node.n - 1) |i| node.pairs[i] = node.pairs[i + 1];
                     node.n -= 1;
                     return;
                 } else {
@@ -237,13 +238,13 @@ pub fn BTree(comptime T: type) type {
                     if (node.children[idx].?.n >= self.t) {
                         var pred = node.children[idx].?;
                         while (!pred.leaf) pred = pred.children[pred.n].?;
-                        node.keys[idx] = pred.keys[pred.n - 1];
-                        try self.deleteNode(node.children[idx].?, node.keys[idx]);
+                        node.pairs[idx] = pred.pairs[pred.n - 1];
+                        try self.deleteNode(node.children[idx].?, node.pairs[idx].key);
                     } else if (node.children[idx + 1].?.n >= self.t) {
                         var succ = node.children[idx + 1].?;
                         while (!succ.leaf) succ = succ.children[0].?;
-                        node.keys[idx] = succ.keys[0];
-                        try self.deleteNode(node.children[idx + 1].?, node.keys[idx]);
+                        node.pairs[idx] = succ.pairs[0];
+                        try self.deleteNode(node.children[idx + 1].?, node.pairs[idx].key);
                     } else {
                         try self.merge(node, idx);
                         try self.deleteNode(node.children[idx].?, k);
@@ -275,12 +276,12 @@ pub fn BTree(comptime T: type) type {
             const t = self.t;
             var child = node.children[idx].?;
             const sibling = node.children[idx + 1].?;
-            child.keys[t - 1] = node.keys[idx];
-            for (0..sibling.n) |i| child.keys[t + i] = sibling.keys[i];
+            child.pairs[t - 1] = node.pairs[idx];
+            for (0..sibling.n) |i| child.pairs[t + i] = sibling.pairs[i];
             if (!child.leaf) {
                 for (0..sibling.n + 1) |i| child.children[t + i] = sibling.children[i];
             }
-            for (idx..node.n - 1) |i| node.keys[i] = node.keys[i + 1];
+            for (idx..node.n - 1) |i| node.pairs[i] = node.pairs[i + 1];
             for (idx + 1..node.n) |i| node.children[i] = node.children[i + 1];
             child.n += sibling.n + 1;
             node.n -= 1;
@@ -293,7 +294,7 @@ pub fn BTree(comptime T: type) type {
             const sibling = node.children[idx - 1].?;
             var i: usize = child.n;
             while (i > 0) : (i -= 1) {
-                child.keys[i] = child.keys[i - 1];
+                child.pairs[i] = child.pairs[i - 1];
             }
             if (!child.leaf) {
                 var j: usize = child.n + 1;
@@ -301,9 +302,9 @@ pub fn BTree(comptime T: type) type {
                     child.children[j] = child.children[j - 1];
                 }
             }
-            child.keys[0] = node.keys[idx - 1];
+            child.pairs[0] = node.pairs[idx - 1];
             if (!child.leaf) child.children[0] = sibling.children[sibling.n];
-            node.keys[idx - 1] = sibling.keys[sibling.n - 1];
+            node.pairs[idx - 1] = sibling.pairs[sibling.n - 1];
             child.n += 1;
             sibling.n -= 1;
         }
@@ -312,12 +313,12 @@ pub fn BTree(comptime T: type) type {
             _ = self;
             var child = node.children[idx].?;
             const sibling = node.children[idx + 1].?;
-            child.keys[child.n] = node.keys[idx];
+            child.pairs[child.n] = node.pairs[idx];
             if (!child.leaf) child.children[child.n + 1] = sibling.children[0];
-            node.keys[idx] = sibling.keys[0];
+            node.pairs[idx] = sibling.pairs[0];
             var i: usize = 0;
             while (i < sibling.n - 1) : (i += 1) {
-                sibling.keys[i] = sibling.keys[i + 1];
+                sibling.pairs[i] = sibling.pairs[i + 1];
             }
             if (!sibling.leaf) {
                 var j: usize = 0;

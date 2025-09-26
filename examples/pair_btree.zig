@@ -12,7 +12,7 @@ fn pairCompare(a: Pair, b: Pair) std.math.Order {
 
 pub fn main() !void {
     var gpa = std.heap.page_allocator;
-    var tree = btree_mod.BTree(Pair, pairCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(Pair).init(&gpa, 2, pairCompare);
     defer tree.deinit();
 
     try tree.insert(Pair{ .key = 1, .value = "one" });

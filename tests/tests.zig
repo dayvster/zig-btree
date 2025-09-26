@@ -1,11 +1,11 @@
 test "BTree iterator traverses all keys in order" {
     std.debug.print("\nTEST: BTree iterator traverses all keys in order\n", .{});
     var gpa = std.testing.allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17 };
     for (values) |v| try tree.insert(v);
-    var it = try btree_mod.BTree(i32, intCompare).Iterator.init(&tree);
+    var it = try btree_mod.BTree(i32).Iterator.init(&tree);
     defer it.deinit();
     var seen = [_]i32{0} ** values.len;
     var idx: usize = 0;
@@ -41,7 +41,7 @@ fn intCompare(a: i32, b: i32) std.math.Order {
 test "BTree insert and search" {
     std.debug.print("\nTEST: BTree insert and search\n", .{});
     var gpa = std.testing.allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17 };
     for (values) |v| try tree.insert(v);
@@ -53,7 +53,7 @@ test "BTree insert and search" {
 test "BTree delete removes keys and keeps tree valid" {
     std.debug.print("\nTEST: BTree delete removes keys and keeps tree valid\n", .{});
     var gpa = std.testing.allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17 };
     for (values) |v| try tree.insert(v);
@@ -81,7 +81,7 @@ test "BTree delete removes keys and keeps tree valid" {
 test "BTree remains balanced after many inserts" {
     std.debug.print("\nTEST: BTree remains balanced after many inserts\n", .{});
     var gpa = std.testing.allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 3);
+    var tree = btree_mod.BTree(i32).init(&gpa, 3, intCompare);
     defer tree.deinit();
     const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17, 1, 2, 3, 4, 8, 9, 11, 13, 14, 15, 16, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29 };
     for (values) |v| try tree.insert(v);
@@ -91,7 +91,7 @@ test "BTree remains balanced after many inserts" {
     if (tree.root) |r| check_balanced(r, tree.t, true);
 }
 
-fn check_balanced(node: *btree_mod.BTree(i32, intCompare).Node, t: usize, is_root: bool) void {
+fn check_balanced(node: *btree_mod.BTree(i32).Node, t: usize, is_root: bool) void {
     if (!is_root) {
         std.testing.expect(node.n >= t - 1) catch @panic("Node underflow");
     }
@@ -106,7 +106,7 @@ fn check_balanced(node: *btree_mod.BTree(i32, intCompare).Node, t: usize, is_roo
 test "BTree search debug output" {
     std.debug.print("\nTEST: BTree search debug output\n", .{});
     var gpa = std.testing.allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17 };
     for (values) |v| try tree.insert(v);

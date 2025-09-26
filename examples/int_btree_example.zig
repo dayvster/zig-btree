@@ -7,7 +7,7 @@ fn intCompare(a: i32, b: i32) std.math.Order {
 
 pub fn main() !void {
     var gpa = std.heap.page_allocator;
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree_mod.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
 
     try tree.insert(10);

@@ -4,7 +4,7 @@ const btree = @import("btree");
 pub fn main() !void {
     // Example usage of BTree
     var gpa = std.heap.page_allocator;
-    var tree = btree.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     std.debug.print("BTree created with min degree {d}\n", .{tree.t});
 }
@@ -17,7 +17,7 @@ fn intCompare(a: i32, b: i32) std.math.Order {
 
 test "simple test" {
     const gpa = std.testing.allocator;
-    var tree = btree.BTree(i32, intCompare).init(&gpa, 2);
+    var tree = btree.BTree(i32).init(&gpa, 2, intCompare);
     defer tree.deinit();
     try tree.insert(10);
     try tree.insert(20);

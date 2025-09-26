@@ -139,25 +139,6 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     test_step.dependOn(&run_tests.step);
 
-    // Add a module for btree so it can be imported as a package
-    const btree_pkg = b.addModule("btree", .{
-        .root_source_file = b.path("src/btree.zig"),
-        .target = target,
-    });
-
-    // Add an example build step for delete_example.zig
-    const delete_example = b.addExecutable(.{
-        .name = "delete_example",
-        .root_source_file = b.path("examples/delete_example.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{.{ .name = "btree", .module = btree_pkg }},
-    });
-    b.installArtifact(delete_example);
-    const run_delete_example = b.addRunArtifact(delete_example);
-    const example_step = b.step("run-example", "Run the delete example");
-    example_step.dependOn(&run_delete_example.step);
-
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means

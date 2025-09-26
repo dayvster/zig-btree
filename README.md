@@ -1,9 +1,8 @@
 
 # Zig BTree
 
-![zig](https://img.shields.io/badge/zig-0.11%2B-f7a41d?logo=zig)
+![zig](https://img.shields.io/badge/zig-0.15%2B-f7a41d?logo=zig)
 ![MIT](https://img.shields.io/badge/license-MIT-green.svg)
-![CI](https://github.com/yourusername/btree/actions/workflows/ci.yml/badge.svg)
 
 A robust, generic B-Tree implementation for Zig.
 

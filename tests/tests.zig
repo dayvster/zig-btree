@@ -1,3 +1,34 @@
+test "BTree iterator traverses all keys in order" {
+    std.debug.print("\nTEST: BTree iterator traverses all keys in order\n", .{});
+    var gpa = std.testing.allocator;
+    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
+    defer tree.deinit();
+    const values = [_]i32{ 10, 20, 5, 6, 12, 30, 7, 17 };
+    for (values) |v| try tree.insert(v);
+    var it = try btree_mod.BTree(i32, intCompare).Iterator.init(&tree);
+    defer it.deinit();
+    var seen = [_]i32{0} ** values.len;
+    var idx: usize = 0;
+    var prev: ?i32 = null;
+    while (it.next()) |ptr| {
+        std.debug.print("{} ", .{ptr.*});
+        seen[idx] = ptr.*;
+        if (prev) |p| {
+            std.testing.expect(p <= ptr.*) catch @panic("Iterator not in order");
+        }
+        prev = ptr.*;
+        idx += 1;
+    }
+    std.debug.print("\n", .{});
+    std.testing.expect(idx == values.len) catch @panic("Iterator did not visit all keys");
+    // Sort both arrays and compare
+    std.sort.heap(i32, &seen, {}, comptime std.sort.asc(i32));
+    var sorted = values;
+    std.sort.heap(i32, &sorted, {}, comptime std.sort.asc(i32));
+    for (seen, sorted) |a, b| {
+        std.testing.expect(a == b) catch @panic("Iterator missed or duplicated key");
+    }
+}
 const std = @import("std");
 const btree_mod = @import("btree");
 

@@ -4,6 +4,81 @@ pub fn BTree(comptime T: type, comptime compare: fn (T, T) std.math.Order) type 
     return struct {
         const Self = @This();
 
+        pub const Iterator = struct {
+            stack: []?*Node,
+            stack_indices: []usize,
+            depth: usize,
+            allocator: *const std.mem.Allocator,
+            current: ?*T,
+
+            pub fn init(self: *Self) !Iterator {
+                // Max depth is at most log_t(n), but we use t*32 for safety
+                const max_depth = 32 * self.t;
+                const stack = try self.allocator.alloc(?*Node, max_depth);
+                const stack_indices = try self.allocator.alloc(usize, max_depth);
+                var it = Iterator{
+                    .stack = stack,
+                    .stack_indices = stack_indices,
+                    .depth = 0,
+                    .allocator = self.allocator,
+                    .current = null,
+                };
+                if (self.root) |r| {
+                    it.push(r, 0);
+                    it.descendLeft();
+                }
+                return it;
+            }
+
+            fn push(self: *Iterator, node: *Node, idx: usize) void {
+                self.stack[self.depth] = node;
+                self.stack_indices[self.depth] = idx;
+                self.depth += 1;
+            }
+
+            fn pop(self: *Iterator) void {
+                if (self.depth > 0) self.depth -= 1;
+            }
+
+            fn descendLeft(self: *Iterator) void {
+                while (self.depth > 0) {
+                    const node = self.stack[self.depth - 1].?;
+                    const idx = self.stack_indices[self.depth - 1];
+                    while (!node.leaf and node.children[idx] != null) {
+                        self.push(node.children[idx].?, 0);
+                        // idx is always 0 after first push
+                        // so this loop will only run once per descend
+                        break;
+                    }
+                    break;
+                }
+            }
+
+            pub fn next(self: *Iterator) ?*T {
+                while (self.depth > 0) {
+                    const node = self.stack[self.depth - 1].?;
+                    const idx = self.stack_indices[self.depth - 1];
+                    if (idx < node.n) {
+                        self.current = &node.keys[idx];
+                        self.stack_indices[self.depth - 1] += 1;
+                        if (!node.leaf and node.children[idx + 1] != null) {
+                            self.push(node.children[idx + 1].?, 0);
+                            self.descendLeft();
+                        }
+                        return self.current;
+                    } else {
+                        self.pop();
+                    }
+                }
+                return null;
+            }
+
+            pub fn deinit(self: *Iterator) void {
+                self.allocator.free(self.stack);
+                self.allocator.free(self.stack_indices);
+            }
+        };
+
         pub const Node = struct {
             keys: []T,
             children: []?*Node,

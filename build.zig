@@ -60,24 +60,10 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "btree",
         .root_module = b.createModule(.{
-            // b.createModule defines a new module just like b.addModule but,
-            // unlike b.addModule, it does not expose the module to consumers of
-            // this package, which is why in this case we don't have to give it a name.
             .root_source_file = b.path("src/main.zig"),
-            // Target and optimization levels must be explicitly wired in when
-            // defining an executable or library (in the root module), and you
-            // can also hardcode a specific target for an executable or library
-            // definition if desireable (e.g. firmware for embedded devices).
             .target = target,
             .optimize = optimize,
-            // List of modules available for import in source files part of the
-            // root module.
             .imports = &.{
-                // Here "btree" is the name you will use in your source code to
-                // import this module (e.g. `@import("btree")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
                 .{ .name = "btree", .module = mod },
             },
         }),
@@ -141,6 +127,36 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    // Add a test step for tests/tests.zig so root-relative imports work
+    const tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/tests.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    const run_tests = b.addRunArtifact(tests);
+    test_step.dependOn(&run_tests.step);
+
+    // Add a module for btree so it can be imported as a package
+    const btree_pkg = b.addModule("btree", .{
+        .root_source_file = b.path("src/btree.zig"),
+        .target = target,
+    });
+
+    // Add an example build step for delete_example.zig
+    const delete_example = b.addExecutable(.{
+        .name = "delete_example",
+        .root_source_file = b.path("examples/delete_example.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "btree", .module = btree_pkg }},
+    });
+    b.installArtifact(delete_example);
+    const run_delete_example = b.addRunArtifact(delete_example);
+    const example_step = b.step("run-example", "Run the delete example");
+    example_step.dependOn(&run_delete_example.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

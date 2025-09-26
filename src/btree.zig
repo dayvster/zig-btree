@@ -141,5 +141,128 @@ pub fn BTree(comptime T: type, comptime compare: fn (T, T) std.math.Order) type 
             parent.keys[i] = y.keys[t - 1];
             parent.n += 1;
         }
+
+        /// Delete a key from the BTree.
+        pub fn delete(self: *Self, k: T) !void {
+            if (self.root == null) return;
+            try self.deleteNode(self.root.?, k);
+            // If the root node has 0 keys and is not a leaf, make its first child the new root
+            if (self.root.?.n == 0 and !self.root.?.leaf) {
+                const old_root = self.root.?;
+                self.root = old_root.children[0];
+                self.allocator.destroy(old_root);
+            }
+            // If the root is empty and a leaf, tree is now empty
+            if (self.root.?.n == 0 and self.root.?.leaf) {
+                self.allocator.destroy(self.root.?);
+                self.root = null;
+            }
+        }
+
+        fn deleteNode(self: *Self, node: *Node, k: T) !void {
+            var idx: usize = 0;
+            while (idx < node.n and compare(k, node.keys[idx]) == .gt) : (idx += 1) {}
+            if (idx < node.n and compare(k, node.keys[idx]) == .eq) {
+                if (node.leaf) {
+                    // Case 1: key in leaf node
+                    for (idx..node.n - 1) |i| node.keys[i] = node.keys[i + 1];
+                    node.n -= 1;
+                    return;
+                } else {
+                    // Case 2: key in internal node
+                    if (node.children[idx].?.n >= self.t) {
+                        var pred = node.children[idx].?;
+                        while (!pred.leaf) pred = pred.children[pred.n].?;
+                        node.keys[idx] = pred.keys[pred.n - 1];
+                        try self.deleteNode(node.children[idx].?, node.keys[idx]);
+                    } else if (node.children[idx + 1].?.n >= self.t) {
+                        var succ = node.children[idx + 1].?;
+                        while (!succ.leaf) succ = succ.children[0].?;
+                        node.keys[idx] = succ.keys[0];
+                        try self.deleteNode(node.children[idx + 1].?, node.keys[idx]);
+                    } else {
+                        try self.merge(node, idx);
+                        try self.deleteNode(node.children[idx].?, k);
+                    }
+                    return;
+                }
+            }
+            if (node.leaf) return; // Not found
+            var child_idx = idx;
+            if (node.children[child_idx] == null) return;
+            if (node.children[child_idx].?.n == self.t - 1) {
+                if (child_idx > 0 and node.children[child_idx - 1].?.n >= self.t) {
+                    try self.borrowFromPrev(node, child_idx);
+                } else if (child_idx < node.n and node.children[child_idx + 1] != null and node.children[child_idx + 1].?.n >= self.t) {
+                    try self.borrowFromNext(node, child_idx);
+                } else {
+                    if (child_idx < node.n) {
+                        try self.merge(node, child_idx);
+                    } else {
+                        try self.merge(node, child_idx - 1);
+                        child_idx -= 1;
+                    }
+                }
+            }
+            try self.deleteNode(node.children[child_idx].?, k);
+        }
+
+        fn merge(self: *Self, node: *Node, idx: usize) !void {
+            const t = self.t;
+            var child = node.children[idx].?;
+            const sibling = node.children[idx + 1].?;
+            child.keys[t - 1] = node.keys[idx];
+            for (0..sibling.n) |i| child.keys[t + i] = sibling.keys[i];
+            if (!child.leaf) {
+                for (0..sibling.n + 1) |i| child.children[t + i] = sibling.children[i];
+            }
+            for (idx..node.n - 1) |i| node.keys[i] = node.keys[i + 1];
+            for (idx + 1..node.n) |i| node.children[i] = node.children[i + 1];
+            child.n += sibling.n + 1;
+            node.n -= 1;
+            self.allocator.destroy(sibling);
+        }
+
+        fn borrowFromPrev(_self: *Self, _node: *Node, _idx: usize) !void {
+            _ = _self; // autofix
+            var child = _node.children[_idx].?;
+            const sibling = _node.children[_idx - 1].?;
+            var i: usize = child.n;
+            while (i > 0) : (i -= 1) {
+                child.keys[i] = child.keys[i - 1];
+            }
+            if (!child.leaf) {
+                var j: usize = child.n + 1;
+                while (j > 0) : (j -= 1) {
+                    child.children[j] = child.children[j - 1];
+                }
+            }
+            child.keys[0] = _node.keys[_idx - 1];
+            if (!child.leaf) child.children[0] = sibling.children[sibling.n];
+            _node.keys[_idx - 1] = sibling.keys[sibling.n - 1];
+            child.n += 1;
+            sibling.n -= 1;
+        }
+
+        fn borrowFromNext(_self: *Self, _node: *Node, _idx: usize) !void {
+            _ = _self; // autofix
+            var child = _node.children[_idx].?;
+            const sibling = _node.children[_idx + 1].?;
+            child.keys[child.n] = _node.keys[_idx];
+            if (!child.leaf) child.children[child.n + 1] = sibling.children[0];
+            _node.keys[_idx] = sibling.keys[0];
+            var i: usize = 0;
+            while (i < sibling.n - 1) : (i += 1) {
+                sibling.keys[i] = sibling.keys[i + 1];
+            }
+            if (!sibling.leaf) {
+                var j: usize = 0;
+                while (j < sibling.n) : (j += 1) {
+                    sibling.children[j] = sibling.children[j + 1];
+                }
+            }
+            child.n += 1;
+            sibling.n -= 1;
+        }
     };
 }

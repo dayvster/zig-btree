@@ -7,9 +7,11 @@
 A robust, generic B-Tree implementation for Zig.
 
 ## Features
-- Generic (any comparable type)
+- Generic (any comparable key type, any value type)
+- Key-value pair support (like a map or database index)
 - Allocator-safe
-- Simple API: `insert`, `search`, `deinit`
+- Simple API: `insert(key, value)`, `search(key)`, `delete(key)`, `deinit`
+- Iterator for in-order traversal
 - MIT Licensed
 
 ## Usage
@@ -37,53 +39,46 @@ const btree = @import("btree");
 
 ## Example
 
-See [`examples/`](examples/) for more.
-
+### Key-Value Example
 
 ```zig
 const std = @import("std");
 const btree_mod = @import("btree");
 
-// Comparison function for integers
+// Comparison function for integer keys
 fn intCompare(a: i32, b: i32) std.math.Order {
     return if (a < b) .lt else if (a > b) .gt else .eq;
 }
 
 pub fn main() !void {
     var gpa = std.heap.page_allocator;
-    // Create a B-tree of i32 with minimum degree 2
-    var tree = btree_mod.BTree(i32, intCompare).init(&gpa, 2);
-    defer tree.deinit(); // Always free memory!
+    // Create a B-tree of i32 keys and i32 values, min degree 2
+    var tree = btree_mod.BTree(i32, i32).init(&gpa, 2, intCompare);
+    defer tree.deinit();
 
-    // Insert some values
-    try tree.insert(10);
-    try tree.insert(20);
-    try tree.insert(5);
-    try tree.insert(6);
-    try tree.insert(12);
-    try tree.insert(30);
-    try tree.insert(7);
-    try tree.insert(17);
+    // Insert key-value pairs
+    try tree.insert(10, 100);
+    try tree.insert(20, 200);
+    try tree.insert(5, 50);
 
-    // Search for a value
-    const search_key = 12;
-    const found = tree.search(search_key);
-    if (found) |ptr| {
-        std.debug.print("Found key: {d}\n", .{ptr.*});
-    } else {
-        std.debug.print("Key {d} not found\n", .{search_key});
+    // Search for a key
+    const found = tree.search(20);
+    if (found) |pair| {
+        std.debug.print("Found: key={} value={}\n", .{pair.key, pair.value});
     }
 
-    // Try searching for a missing value
-    const missing = tree.search(99);
-    if (missing == null) {
-        std.debug.print("Key 99 not found\n", .{});
+    // Iterate all key-value pairs in order
+    var it = try tree.Iterator.init(&tree);
+    defer it.deinit();
+    while (it.next()) |pair| {
+        std.debug.print("{} => {}\n", .{pair.key, pair.value});
     }
 }
-// Output:
-// Found key: 12
-// Key 99 not found
 ```
+
+See [`examples/`](examples/) for more.
+
+
 
 ## Development
 - Main implementation: [`src/btree.zig`](src/btree.zig)

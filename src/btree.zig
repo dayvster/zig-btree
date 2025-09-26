@@ -1,5 +1,12 @@
 const std = @import("std");
 
+///
+/// Generic, allocator-aware B-tree implementation for key-value pairs.
+///
+/// - K: key type
+/// - V: value type
+/// - Returns a struct with insert, search, delete, and iterator methods.
+///
 pub fn BTree(comptime K: type, comptime V: type) type {
     return struct {
         const Self = @This();
@@ -19,6 +26,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             allocator: *const std.mem.Allocator,
             current: ?*Pair,
 
+            ///
+            /// Initializes a new iterator for the given BTree.
+            ///
             pub fn init(tree: *Self) !Iterator {
                 const max_depth = 32 * tree.t;
                 const stack = try tree.allocator.alloc(?*Node, max_depth);
@@ -37,16 +47,25 @@ pub fn BTree(comptime K: type, comptime V: type) type {
                 return it;
             }
 
+            ///
+            /// Pushes a node and index onto the iterator stack.
+            ///
             fn push(self: *Iterator, node: *Node, idx: usize) void {
                 self.stack[self.depth] = node;
                 self.stack_indices[self.depth] = idx;
                 self.depth += 1;
             }
 
+            ///
+            /// Pops the top node from the iterator stack.
+            ///
             fn pop(self: *Iterator) void {
                 if (self.depth > 0) self.depth -= 1;
             }
 
+            ///
+            /// Descends to the leftmost node in the iterator stack.
+            ///
             fn descendLeft(self: *Iterator) void {
                 while (self.depth > 0) {
                     const node = self.stack[self.depth - 1].?;
@@ -59,6 +78,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
                 }
             }
 
+            ///
+            /// Advances the iterator and returns the next key-value pair, or null if done.
+            ///
             pub fn next(self: *Iterator) ?*Pair {
                 while (self.depth > 0) {
                     const node = self.stack[self.depth - 1].?;
@@ -78,6 +100,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
                 return null;
             }
 
+            ///
+            /// Frees resources used by the iterator.
+            ///
             pub fn deinit(self: *Iterator) void {
                 self.allocator.free(self.stack);
                 self.allocator.free(self.stack_indices);
@@ -88,7 +113,10 @@ pub fn BTree(comptime K: type, comptime V: type) type {
         t: usize,
         allocator: *const std.mem.Allocator,
         compare: *const fn (K, K) std.math.Order,
-        /// Initialize a new BTree with the given allocator and minimum degree `t`.
+
+        ///
+        /// Initializes a new BTree with the given allocator, minimum degree `t`, and compare function.
+        ///
         pub fn init(allocator: *const std.mem.Allocator, t: usize, compare: CompareFn) @This() {
             return @This(){
                 .root = null,
@@ -98,12 +126,18 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             };
         }
 
+        ///
+        /// Frees all memory used by the BTree and its nodes.
+        ///
         pub fn deinit(self: *@This()) void {
             if (self.root) |r| {
                 self.freeNode(r);
             }
         }
 
+        ///
+        /// Recursively frees a node and its children.
+        ///
         fn freeNode(self: *@This(), node: *Node) void {
             if (!node.leaf) {
                 for (node.children[0 .. node.n + 1]) |maybe_child| {
@@ -115,6 +149,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             self.allocator.destroy(node);
         }
 
+        ///
+        /// Allocates and initializes a new node (leaf or internal).
+        ///
         fn createNode(self: *@This(), leaf: bool) !*Node {
             const node = try self.allocator.create(Node);
             node.* = Node{
@@ -126,10 +163,16 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             return node;
         }
 
+        ///
+        /// Searches for a key in the BTree and returns a pointer to the key-value pair, or null if not found.
+        ///
         pub fn search(self: *@This(), k: K) ?*Pair {
             return if (self.root) |r| self.searchNode(r, k) else null;
         }
 
+        ///
+        /// Recursively searches for a key in a node and its children.
+        ///
         fn searchNode(self: *@This(), node: *Node, k: K) ?*Pair {
             var i: usize = 0;
             while (i < node.n and self.compare(k, node.pairs[i].key) == .gt) : (i += 1) {}
@@ -142,6 +185,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             }
         }
 
+        ///
+        /// Inserts a key-value pair into the BTree.
+        ///
         pub fn insert(self: *@This(), k: K, v: V) !void {
             if (self.root == null) {
                 self.root = try self.createNode(true);
@@ -160,6 +206,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             }
         }
 
+        ///
+        /// Inserts a key-value pair into a node that is not full.
+        ///
         fn insertNonFull(self: *@This(), node: *Node, k: K, v: V) !void {
             var i = node.n;
             if (node.leaf) {
@@ -182,6 +231,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             }
         }
 
+        ///
+        /// Splits a full child node during insertion.
+        ///
         fn splitChild(self: *@This(), parent: *Node, i: usize, y: *Node) !void {
             const t = self.t;
             var z = try self.createNode(y.leaf);
@@ -208,6 +260,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             parent.n += 1;
         }
 
+        ///
+        /// Deletes a key (and its value) from the BTree.
+        ///
         pub fn delete(self: *@This(), k: K) !void {
             if (self.root == null) return;
             try self.deleteNode(self.root.?, k);
@@ -224,6 +279,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             }
         }
 
+        ///
+        /// Recursively deletes a key from a node and its children.
+        ///
         fn deleteNode(self: *@This(), node: *Node, k: K) !void {
             var idx: usize = 0;
             while (idx < node.n and self.compare(k, node.pairs[idx].key) == .gt) : (idx += 1) {}
@@ -272,6 +330,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             try self.deleteNode(node.children[child_idx].?, k);
         }
 
+        ///
+        /// Merges a node with its sibling during deletion.
+        ///
         fn merge(self: *@This(), node: *Node, idx: usize) !void {
             const t = self.t;
             var child = node.children[idx].?;
@@ -288,6 +349,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             self.allocator.destroy(sibling);
         }
 
+        ///
+        /// Borrows a key from the previous sibling during deletion.
+        ///
         fn borrowFromPrev(self: *@This(), node: *Node, idx: usize) !void {
             _ = self;
             var child = node.children[idx].?;
@@ -309,6 +373,9 @@ pub fn BTree(comptime K: type, comptime V: type) type {
             sibling.n -= 1;
         }
 
+        ///
+        /// Borrows a key from the next sibling during deletion.
+        ///
         fn borrowFromNext(self: *@This(), node: *Node, idx: usize) !void {
             _ = self;
             var child = node.children[idx].?;
